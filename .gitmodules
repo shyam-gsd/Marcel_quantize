@@ -6,6 +6,4 @@
 [submodule "/ultralytics"]
     path = /ultralytics
     url = https://github.com/lecramdev/ultralytics.git
-    branch = dev-cfc
-[submodule "ultralytics"]
 	branch = dev-cfc
