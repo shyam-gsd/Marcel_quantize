@@ -1,9 +1,9 @@
-[submodule "/brevitas"]
-    path = /brevitas
+[submodule "brevitas"]
+    path = brevitas
 	url = https://github.com/lecramdev/brevitas.git
 	branch = dev-cfc
 
-[submodule "/ultralytics"]
-    path = /ultralytics
+[submodule "ultralytics"]
+    path = ultralytics
     url = https://github.com/lecramdev/ultralytics.git
 	branch = dev-cfc
