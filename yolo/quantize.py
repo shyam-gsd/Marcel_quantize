@@ -12,7 +12,8 @@ from brevitas import config
 import brevitas.graph
 import brevitas.graph.utils
 from brevitas.graph.quantize import quantize, preprocess_for_quantize, align_input_quant
-from brevitas.graph.quantize_impl import are_inputs_unsigned, inp_placeholder_handler, layer_handler, add_output_quant_handler, layer_handler, recursive_input_handler, residual_handler
+from brevitas.graph.quantize_impl import are_inputs_unsigned, inp_placeholder_handler, layer_handler, \
+    add_output_quant_handler, layer_handler, recursive_input_handler, residual_handler
 from brevitas.graph.calibrate import bias_correction_mode, calibration_mode
 from brevitas.export import export_qonnx
 import brevitas.nn as qnn
@@ -33,7 +34,8 @@ from ultralytics.models.yolo.detect.train import DetectionTrainer
 import ultralytics.nn.tasks as tasks
 
 import warnings
-warnings.filterwarnings("ignore", r"Defining your .*", category=UserWarning) 
+
+warnings.filterwarnings("ignore", r"Defining your .*", category=UserWarning)
 
 from PIL import Image
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
@@ -42,31 +44,34 @@ import inference.inference_util as inference_util
 
 from tqdm import tqdm
 
-class QuantizeWrapper(torch.nn.Module):
-  def __init__(self, module: tasks.DetectionModel) -> None:
-    super().__init__()
-    self.m = module
 
-  def forward(self, x):
-    return self.m(x)
+class QuantizeWrapper(torch.nn.Module):
+    def __init__(self, module: tasks.DetectionModel) -> None:
+        super().__init__()
+        self.m = module
+
+    def forward(self, x):
+        return self.m(x)
+
 
 class DetectWrapperQuantize(torch.nn.Module):
-  def __init__(self, module) -> None:
-    super().__init__()
-    self.m = module
+    def __init__(self, module) -> None:
+        super().__init__()
+        self.m = module
 
-  def forward(self, x1, x2, x3):
+    def forward(self, x1, x2, x3):
+        return self.m([x1, x2, x3])
 
-    return self.m([x1, x2, x3])
-  
+
 class DetectWrapper(torch.nn.Module):
-  def __init__(self, module) -> None:
-    super().__init__()
-    self.m = module
+    def __init__(self, module) -> None:
+        super().__init__()
+        self.m = module
 
-  def forward(self, x):
-    return self.m(x[0], x[1], x[2])
-    
+    def forward(self, x):
+        return self.m(x[0], x[1], x[2])
+
+
 def insert_inp_quant(model, quant_identity_map):
     rewriters = []
     for node in model.graph.nodes:
@@ -87,6 +92,7 @@ def insert_inp_quant(model, quant_identity_map):
     for rewriter in rewriters:
         model = rewriter.apply(model)
     return model
+
 
 def replace_outp_quant(model, quant_identity_map, quant_act_map, unsigned_act_tuple):
     rewriters = []
@@ -109,12 +115,13 @@ def replace_outp_quant(model, quant_identity_map, quant_act_map, unsigned_act_tu
                     rewriters,
                     quant_identity_map,
                     align_input_quant,
-                    align_sign=False,)
-                    # path_list=[],
-                    # processed=processed)
+                    align_sign=False,
+                    path_list=[],
+                    processed=processed)
     for rewriter in rewriters:
         model = rewriter.apply(model)
     return model
+
 
 def my_quantize(
         graph_model,
@@ -131,7 +138,7 @@ def my_quantize(
     graph_model.eval()
     if insert_input_quant:
         graph_model = insert_inp_quant(graph_model, quant_identity_map)
-    graph_model = layer_handler(graph_model,quant_identity_map=quant_identity_map, layer_map=quant_act_map, requantize_output=False)
+    graph_model = layer_handler(graph_model, layer_map=quant_act_map, requantize_output=False)
     graph_model = add_output_quant_handler(graph_model, quant_identity_map, quant_act_map, unsigned_act_tuple)
     graph_model = layer_handler(
         graph_model,
@@ -140,7 +147,8 @@ def my_quantize(
         quant_act_map=quant_act_map,
         unsigned_act_tuple=unsigned_act_tuple,
         requantize_output=requantize_layer_handler_output)
-    graph_model = residual_handler(graph_model, quant_identity_map, quant_act_map, unsigned_act_tuple, align_input_quant)
+    graph_model = residual_handler(graph_model, quant_identity_map, quant_act_map, unsigned_act_tuple,
+                                   align_input_quant)
     # graph_model = DisableLastReturnQuantTensor().apply(graph_model)
     if replace_output_quant:
         graph_model = replace_outp_quant(graph_model, quant_identity_map, quant_act_map, unsigned_act_tuple)
@@ -148,17 +156,21 @@ def my_quantize(
     config.IGNORE_MISSING_KEYS = ignore_missing_keys_state
     return graph_model
 
+
 class Uint8ActPerTensorPoT(quant.Uint8ActPerTensorFloat):
     restrict_scaling_type = RestrictValueType.POWER_OF_TWO
     restrict_value_float_to_int_impl = CeilSte
+
 
 class Int8ActPerTensorPoT(quant.Int8ActPerTensorFloat):
     restrict_scaling_type = RestrictValueType.POWER_OF_TWO
     restrict_value_float_to_int_impl = CeilSte
 
+
 class Int8WeightPerChannelPoT(quant.Int8WeightPerChannelFloat):
     restrict_scaling_type = RestrictValueType.POWER_OF_TWO
     restrict_value_float_to_int_impl = CeilSte
+
 
 ACT_BIT_WIDTH = 6
 WEIGHT_BIT_WIDTH = 6
@@ -197,7 +209,6 @@ identity_map = {
     'unsigned8':
         (qnn.QuantIdentity, {
             'act_quant': Uint8ActPerTensorPoT, 'bit_width': 8, 'return_quant_tensor': True})}
-
 
 ACT_BIT_WIDTH_DETECT = 6
 WEIGHT_BIT_WIDTH_DETECT = 6
@@ -260,14 +271,16 @@ else:
 
 SIZE = 320
 
+
 class UnpackTensors(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
-    
+
     def forward(self, x):
         x = _unpack_quant_tensor(x)
         # print(x[0][0,:,0,0])
         return x
+
 
 # my_detect = inference_util.QuantDetect(20, [8., 16., 32.])
 # inf_model = [
@@ -339,13 +352,15 @@ class MyDetectionModel(tasks.DetectionModel):
         wrapper_detect = DetectWrapperQuantize(detect)
         pre_detect = preprocess_for_quantize(wrapper_detect)
         # pre = brevitas.graph.ModuleToModuleByClass(nn.SiLU, nn.ReLU).apply(pre)
-        quantized_detect = my_quantize(pre_detect, identity_map_detect, compute_map_detect, act_map_detect, unsigned_act_detect, False, True, True)
+        quantized_detect = my_quantize(pre_detect, identity_map_detect, compute_map_detect, act_map_detect,
+                                       unsigned_act_detect, False, True, True)
 
         # Replace Detect layer with custom Detect
         # detect = self.model[-1]
         quant_detect = inference_util.QuantDetect(nc=detect.nc, stride=detect.stride)
         # Rebuild Model
-        self.model = torch.nn.Sequential(QuantizeWrapper(quantized), DetectWrapper(quantized_detect), UnpackTensors(), quant_detect)
+        self.model = torch.nn.Sequential(QuantizeWrapper(quantized), DetectWrapper(quantized_detect), UnpackTensors(),
+                                         quant_detect)
         for i, m in enumerate(self.model):
             m.i = i
             m.f = -1
@@ -353,22 +368,20 @@ class MyDetectionModel(tasks.DetectionModel):
         self.calibrate()
 
     def _predict_once(self, x, profile=False, visualize=False):
+        # if isinstance(x, torch.Tensor):
+        #     fig, (img_ax, hist_ax) = plt.subplots(1, 2)
+        #     img = x.numpy(force=True)[0,:,:,:]
+        #     qimg = (img.transpose((1, 2, 0)) * 255).astype(int) & 0xf0
+        #     img_ax.imshow(qimg)
+        #     # img_ax.imshow(img.transpose((1, 2, 0)))
+        #     hist_ax.hist(img.reshape(-1), 128)
+        #     fig.set_figwidth(18)
+        #     fig.set_figheight(6)
+        #     plt.show()
+        # if not isinstance(x, torch.fx.Proxy):
+        #     x = x * 2 - 1
         return super()._predict_once(x, profile, visualize)
 
-    # def _predict_once(self, x, profile=False, visualize=False,embed= None):
-    #     # if isinstance(x, torch.Tensor):
-    #     #     fig, (img_ax, hist_ax) = plt.subplots(1, 2)
-    #     #     img = x.numpy(force=True)[0,:,:,:]
-    #     #     qimg = (img.transpose((1, 2, 0)) * 255).astype(int) & 0xf0
-    #     #     img_ax.imshow(qimg)
-    #     #     # img_ax.imshow(img.transpose((1, 2, 0)))
-    #     #     hist_ax.hist(img.reshape(-1), 128)
-    #     #     fig.set_figwidth(18)
-    #     #     fig.set_figheight(6)
-    #     #     plt.show()
-    #     # if not isinstance(x, torch.fx.Proxy):
-    #     #     x = x * 2 - 1
-    #     return super()._predict_once(x, profile, visualize,embed)
 
 def get_model(cfg=None, weights=None, nc=20, verbose=True):
     model = MyDetectionModel(cfg, nc=nc, verbose=verbose)
@@ -381,6 +394,7 @@ def get_model(cfg=None, weights=None, nc=20, verbose=True):
     model.quantize()
     return model
 
+
 class MyTrainer(DetectionTrainer):
     def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks=None):
         super().__init__(cfg, overrides, _callbacks)
@@ -392,7 +406,7 @@ class MyTrainer(DetectionTrainer):
     def get_model(self, cfg=None, weights=None, verbose=True):
         """Return a YOLO detection model."""
         return get_model(cfg, weights, self.data['nc'], verbose and RANK == -1)
-    
+
     def save_model(self):
         """Save model training checkpoints with additional metadata."""
         # Save last and best
@@ -421,6 +435,7 @@ class MyTrainer(DetectionTrainer):
         self.ema.ema = None
         # self.validator(model=deepcopy(self.model))
 
+
 # model = get_model("myyolov6n.yaml")
 
 yolo = YOLO("myyolov6n.yaml", "detect")
@@ -428,11 +443,9 @@ yolo = YOLO("myyolov6n.yaml", "detect")
 # yolo = YOLO("models/best.pt")
 # yolo.val(data="VOC.yaml", half=False, imgsz=SIZE, batch=64, device=device)
 
-yolo.load("../train76/weights/best.pt")
-
 yolo.train(
     data='VOC.yaml', imgsz=SIZE,
-    epochs=1000, patience=50, batch=64,
+    epochs=1000, patience=50, batch=128,
     plots=True, device=device, cache=False, amp=False,
     half=False,
     pretrained=True, resume=True,
@@ -443,20 +456,20 @@ yolo.train(
     trainer=MyTrainer,
     # data='coco128.yaml',
     # freeze=freeze,
-    #fraction=0.1,
+    # fraction=0.1,
     project="qat_yolo",
     name="d0.167_w0.2_c1024_relu_fullpot_w6a6_yolo")
 
 yolo.model.eval().to(device)
 dataloader = inference_util.get_dataloader("images", SIZE)
 with torch.no_grad():
-   for i, (x, _) in enumerate(tqdm(dataloader, desc="Sample images")):
-       results = inference_util.infer(yolo.model, x.to(device), SIZE)
-       for res in results:
-           annotated = res.plot()
-           annotated = Image.fromarray(annotated)
-           annotated.save(f"out_imgs/{i}.jpg")
-       # break
+    for i, (x, _) in enumerate(tqdm(dataloader, desc="Sample images")):
+        results = inference_util.infer(yolo.model, x.to(device), SIZE)
+        for res in results:
+            annotated = res.plot()
+            annotated = Image.fromarray(annotated)
+            annotated.save(f"out_imgs/{i}.jpg")
+        # break
 
 inference_util.print_stats()
 
